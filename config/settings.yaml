@@ -1,0 +1,45 @@
+# HUNTER-v2 Settings
+
+# Twitter account info
+account:
+  username: ""  # Your Twitter username (without @)
+  niche: "tech_ai"
+  language: "ja"  # Primary language: ja, en, etc.
+
+# Posting schedule
+posting:
+  max_daily_tweets: 10  # Conservative limit (Free tier: ~50/day max)
+  max_monthly_tweets: 1400  # Buffer from 1,500 limit
+  optimal_hours: [8, 12, 18, 21]  # JST posting hours
+  thread_max_length: 10  # Max tweets per thread
+
+# Content themes (Tech/AI niche)
+content:
+  themes:
+    - "AI最新ニュース"
+    - "プロンプトエンジニアリング"
+    - "LLM比較・分析"
+    - "AIツール紹介"
+    - "コード・技術Tips"
+    - "業界考察・未来予測"
+  mix_ratio:
+    knowledge_sharing: 0.40  # Tips, How-to
+    news_commentary: 0.25   # News, trends
+    opinions: 0.20          # Thoughts, analysis
+    engagement: 0.15        # Questions, polls
+
+# Reader API settings (third-party)
+reader:
+  provider: "sociavault"  # or "twitterapi_io"
+  monthly_budget_usd: 5.0  # Monthly spending limit
+  cache_ttl_minutes: 30     # Cache API responses
+
+# Agent settings
+agents:
+  model: "claude-sonnet-4-6"
+  max_tokens: 1024
+
+# Competitor accounts to monitor
+competitors: []
+  # - "example_account1"
+  # - "example_account2"

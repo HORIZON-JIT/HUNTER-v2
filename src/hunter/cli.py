@@ -81,7 +81,13 @@ def plan(ctx, dry_run):
     for i, p in enumerate(plans, 1):
         click.echo(f"{i}. [{p.get('day', '?')}] {p.get('theme', '?')}")
         click.echo(f"   Type: {p.get('content_type', 'single')} | Priority: {p.get('priority', '?')}")
+        hook = p.get('hook', '')
+        if hook:
+            click.echo(f"   Hook: {hook[:80]}")
         click.echo(f"   {p.get('description', '')[:100]}")
+        why = p.get('why_viral', '')
+        if why:
+            click.echo(f"   Why viral: {why}")
         click.echo()
 
     if dry_run:

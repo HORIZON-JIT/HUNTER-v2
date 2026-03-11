@@ -13,20 +13,39 @@ posting:
   optimal_hours: [8, 12, 18, 21]  # JST posting hours
   thread_max_length: 10  # Max tweets per thread
 
+# Account persona - WHO you are on Twitter
+persona:
+  name: "puyomi"
+  tagline: "AI触り倒してる人"
+  voice: "casual_sharp"  # casual but insightful
+  tone_rules:
+    - "ですます調禁止。タメ口で書く"
+    - "『〜だと思います』ではなく『〜だろ』『〜じゃん』"
+    - "実体験ベースで語る。エアプ禁止"
+    - "正論よりも本音。きれいごと禁止"
+    - "具体的な数字・体験を入れる"
+    - "1ツイート1メッセージ。詰め込みすぎない"
+  personality:
+    - "AIツールを毎日触って検証してる実践派"
+    - "ダメなものはダメとはっきり言う"
+    - "初心者にも分かりやすく噛み砕く"
+    - "たまに毒舌だけど愛がある"
+
 # Content themes (Tech/AI niche)
 content:
   themes:
-    - "AI最新ニュース"
-    - "プロンプトエンジニアリング"
-    - "LLM比較・分析"
-    - "AIツール紹介"
-    - "コード・技術Tips"
-    - "業界考察・未来予測"
+    - "AI触ってみた系"       # 実際に使った感想・レビュー
+    - "逆張り・本音系"       # みんなが言わないこと
+    - "初心者向けTips"       # 分かりやすい解説
+    - "比較・検証系"         # 実際に試して比較
+    - "あるある・共感系"     # AI使ってる人の共感ネタ
+    - "速報・ニュース考察"   # ニュース+自分の意見
   mix_ratio:
-    knowledge_sharing: 0.40  # Tips, How-to
-    news_commentary: 0.25   # News, trends
-    opinions: 0.20          # Thoughts, analysis
-    engagement: 0.15        # Questions, polls
+    hot_takes: 0.30          # 本音・逆張り（最もバズる）
+    hands_on_review: 0.25    # 触ってみた系（信頼構築）
+    tips_howto: 0.20         # 実践Tips（保存される）
+    engagement: 0.15         # 共感・あるある（RT される）
+    news: 0.10               # ニュース（最低限）
 
 # Reader API settings (third-party)
 reader:

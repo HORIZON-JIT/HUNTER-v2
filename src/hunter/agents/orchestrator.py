@@ -65,11 +65,20 @@ class Orchestrator:
 
         # Save plans to DB
         for plan in plans:
+            # Combine hook + description + why_viral for richer DB storage
+            desc_parts = []
+            if plan.get("hook"):
+                desc_parts.append(f"[Hook] {plan['hook']}")
+            desc_parts.append(plan.get("description", ""))
+            if plan.get("why_viral"):
+                desc_parts.append(f"[Viral] {plan['why_viral']}")
+            full_desc = " | ".join(desc_parts)
+
             cp = ContentPlan(
                 week_start=plan.get("day", ""),
                 theme=plan.get("theme", ""),
                 content_type=plan.get("content_type", "single"),
-                description=plan.get("description", ""),
+                description=full_desc,
                 priority=plan.get("priority", 3),
             )
             plan["id"] = save_content_plan(cp)
@@ -81,32 +90,70 @@ class Orchestrator:
         from datetime import datetime, timedelta
 
         today = datetime.now()
-        themes = self.settings.content.get("themes", [
-            "AI最新ニュース", "プロンプトエンジニアリング", "LLM比較・分析",
-            "AIツール紹介", "コード・技術Tips", "業界考察・未来予測",
-        ])
-        content_types = ["single", "single", "thread", "single", "single", "thread", "single"]
-        descriptions = [
-            "最新のAIモデルやサービスに関するニュース速報",
-            "実践的なプロンプトのコツとテクニック紹介",
-            "主要LLMの性能・特徴の比較分析スレッド",
-            "注目のAIツール・ライブラリのレビュー",
-            "AI開発で使えるコードスニペットやTips",
-            "AI業界の最新動向と今後の展望スレッド",
-            "週末まとめ：今週のAIハイライト",
+        templates = [
+            {
+                "theme": "本音・逆張り系",
+                "content_type": "single",
+                "hook": "ChatGPT最強って言ってる人、本当に他のLLM使ったことある？",
+                "description": "主流意見への逆張りで議論を生む",
+                "why_viral": "議論が起きて引用RTされる",
+                "priority": 5,
+            },
+            {
+                "theme": "触ってみた系",
+                "content_type": "thread",
+                "hook": "話題の〇〇を3日間ガチで使い倒した結論",
+                "description": "実際に使った体験ベースのレビュー",
+                "why_viral": "リアルな体験談は信頼される＆保存される",
+                "priority": 4,
+            },
+            {
+                "theme": "実践Tips",
+                "content_type": "single",
+                "hook": "ChatGPTが急にバカになった時の対処法",
+                "description": "すぐ使える具体的なテクニック",
+                "why_viral": "保存・ブクマされやすい",
+                "priority": 4,
+            },
+            {
+                "theme": "共感・あるある系",
+                "content_type": "single",
+                "hook": "AI使い始めた人が全員通る道",
+                "description": "AIユーザーあるあるで共感を取る",
+                "why_viral": "共感RTされやすい",
+                "priority": 3,
+            },
+            {
+                "theme": "比較・検証系",
+                "content_type": "thread",
+                "hook": "同じプロンプトでGPT-4, Claude, Geminiに聞いた結果",
+                "description": "実際の比較結果を見せる",
+                "why_viral": "みんな気になる比較は保存される",
+                "priority": 4,
+            },
+            {
+                "theme": "本音・逆張り系",
+                "content_type": "single",
+                "hook": "プログラミング学習にAI使うなって言う人いるけど",
+                "description": "世間の常識に切り込む",
+                "why_viral": "賛否両論で拡散する",
+                "priority": 5,
+            },
+            {
+                "theme": "速報・ニュース考察",
+                "content_type": "single",
+                "hook": "〇〇がリリースされたけど、冷静に見た方がいい",
+                "description": "ニュース+自分の辛口見解",
+                "why_viral": "独自視点でフォロー理由になる",
+                "priority": 3,
+            },
         ]
 
         plans = []
-        for i in range(7):
+        for i, tmpl in enumerate(templates):
             day = today + timedelta(days=i)
-            theme = themes[i % len(themes)]
-            plans.append({
-                "day": day.strftime("%Y-%m-%d"),
-                "theme": theme,
-                "content_type": content_types[i],
-                "description": descriptions[i],
-                "priority": 3 if i % 2 == 0 else 2,
-            })
+            plan = {**tmpl, "day": day.strftime("%Y-%m-%d")}
+            plans.append(plan)
 
         return plans
 
@@ -123,10 +170,20 @@ class Orchestrator:
         if plans is None:
             from hunter.db import get_current_week_plans
             db_plans = get_current_week_plans()
-            plans = [
-                {"theme": p.theme, "content_type": p.content_type, "description": p.description}
-                for p in db_plans
-            ]
+            plans = []
+            for p in db_plans:
+                plan_dict = {"theme": p.theme, "content_type": p.content_type, "description": p.description}
+                # Parse hook and why_viral from stored description
+                if "[Hook]" in p.description:
+                    parts = p.description.split(" | ")
+                    for part in parts:
+                        if part.startswith("[Hook] "):
+                            plan_dict["hook"] = part[7:]
+                        elif part.startswith("[Viral] "):
+                            plan_dict["why_viral"] = part[8:]
+                        else:
+                            plan_dict["description"] = part
+                plans.append(plan_dict)
 
         results = []
         for plan in plans:
@@ -137,6 +194,8 @@ class Orchestrator:
                     theme=plan.get("theme", ""),
                     description=plan.get("description", ""),
                     content_type=plan.get("content_type", "single"),
+                    hook=plan.get("hook", ""),
+                    why_viral=plan.get("why_viral", ""),
                 )
 
             # Save main tweet
@@ -163,24 +222,23 @@ class Orchestrator:
 
     def _generate_template_tweet(self, plan: dict) -> dict:
         """Generate a template tweet without API calls."""
-        theme = plan.get("theme", "AI")
+        hook = plan.get("hook", "")
         description = plan.get("description", "")
         content_type = plan.get("content_type", "single")
 
         if content_type == "thread":
             return {
                 "tweets": [
-                    {"text": f"🧵 {theme}について解説します。\n\n{description[:80]}\n\n以下スレッドで詳しく👇", "type": "thread_part", "hashtags": ["#AI"]},
-                    {"text": f"1/ まず基本的なポイントから。{theme}は今、大きな転換期を迎えています。", "type": "thread_part", "hashtags": []},
-                    {"text": f"2/ 特に注目すべきは、{description[:60]}という点です。", "type": "thread_part", "hashtags": []},
-                    {"text": f"3/ まとめ：{theme}の動向は要チェック。フォローして最新情報をキャッチ！\n\n#AI #LLM #テック", "type": "thread_part", "hashtags": ["#AI", "#LLM"]},
+                    {"text": f"{hook}\n\n結論から言う👇", "type": "thread_part", "hashtags": []},
+                    {"text": f"{description[:120]}\nこれがマジで重要。", "type": "thread_part", "hashtags": []},
+                    {"text": "って話。気になったらフォローしとくと追加情報流す", "type": "thread_part", "hashtags": ["#AI"]},
                 ],
                 "alternatives": [],
             }
         else:
             return {
                 "tweets": [
-                    {"text": f"【{theme}】\n\n{description[:100]}\n\n詳しく知りたい方はフォロー！\n\n#AI #LLM", "type": "single", "hashtags": ["#AI", "#LLM"]},
+                    {"text": f"{hook}\n\n{description[:100]}", "type": "single", "hashtags": ["#AI"]},
                 ],
                 "alternatives": [],
             }

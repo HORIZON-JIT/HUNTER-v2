@@ -14,7 +14,7 @@ def load_config(config_path: str | None = None) -> dict:
     else:
         config_path = Path(config_path)
 
-    with open(config_path) as f:
+    with open(config_path, encoding="utf-8") as f:
         return yaml.safe_load(f)
 
 

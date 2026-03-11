@@ -34,8 +34,11 @@ class Orchestrator:
         self.twitter = TwitterClient(settings)
         self.reader = ReaderClient(settings)
 
-    def run_planning(self) -> list[dict]:
+    def run_planning(self, dry_run: bool = False) -> list[dict]:
         """Run the planning workflow: gather trends → create plan.
+
+        Args:
+            dry_run: If True, generate a template plan without calling the Claude API.
 
         Returns:
             List of content plan items
@@ -47,15 +50,18 @@ class Orchestrator:
         except Exception as e:
             print(f"[Warning] Could not fetch trends: {e}")
 
-        # Get past tweets for context
-        past = get_tweets_by_status(TweetStatus.POSTED)
+        if dry_run:
+            plans = self._generate_template_plan()
+        else:
+            # Get past tweets for context
+            past = get_tweets_by_status(TweetStatus.POSTED)
 
-        # Create weekly plan
-        plans = self.strategist.create_weekly_plan(
-            trends=trends,
-            past_tweets=[{"content": t.content} for t in past[:5]],
-            config=self.settings.content,
-        )
+            # Create weekly plan
+            plans = self.strategist.create_weekly_plan(
+                trends=trends,
+                past_tweets=[{"content": t.content} for t in past[:5]],
+                config=self.settings.content,
+            )
 
         # Save plans to DB
         for plan in plans:
@@ -70,11 +76,46 @@ class Orchestrator:
 
         return plans
 
-    def run_creation(self, plans: list[dict] | None = None) -> list[dict]:
+    def _generate_template_plan(self) -> list[dict]:
+        """Generate a template-based weekly plan without API calls."""
+        from datetime import datetime, timedelta
+
+        today = datetime.now()
+        themes = self.settings.content.get("themes", [
+            "AI最新ニュース", "プロンプトエンジニアリング", "LLM比較・分析",
+            "AIツール紹介", "コード・技術Tips", "業界考察・未来予測",
+        ])
+        content_types = ["single", "single", "thread", "single", "single", "thread", "single"]
+        descriptions = [
+            "最新のAIモデルやサービスに関するニュース速報",
+            "実践的なプロンプトのコツとテクニック紹介",
+            "主要LLMの性能・特徴の比較分析スレッド",
+            "注目のAIツール・ライブラリのレビュー",
+            "AI開発で使えるコードスニペットやTips",
+            "AI業界の最新動向と今後の展望スレッド",
+            "週末まとめ：今週のAIハイライト",
+        ]
+
+        plans = []
+        for i in range(7):
+            day = today + timedelta(days=i)
+            theme = themes[i % len(themes)]
+            plans.append({
+                "day": day.strftime("%Y-%m-%d"),
+                "theme": theme,
+                "content_type": content_types[i],
+                "description": descriptions[i],
+                "priority": 3 if i % 2 == 0 else 2,
+            })
+
+        return plans
+
+    def run_creation(self, plans: list[dict] | None = None, dry_run: bool = False) -> list[dict]:
         """Run the creation workflow: plan items → tweet drafts.
 
         Args:
             plans: Content plan items. If None, uses latest plans from DB.
+            dry_run: If True, generate template tweets without calling the Claude API.
 
         Returns:
             List of created tweet drafts with IDs
@@ -89,11 +130,14 @@ class Orchestrator:
 
         results = []
         for plan in plans:
-            created = self.creator.create_tweet(
-                theme=plan.get("theme", ""),
-                description=plan.get("description", ""),
-                content_type=plan.get("content_type", "single"),
-            )
+            if dry_run:
+                created = self._generate_template_tweet(plan)
+            else:
+                created = self.creator.create_tweet(
+                    theme=plan.get("theme", ""),
+                    description=plan.get("description", ""),
+                    content_type=plan.get("content_type", "single"),
+                )
 
             # Save main tweet
             for tweet_data in created.get("tweets", []):
@@ -116,6 +160,30 @@ class Orchestrator:
                     break
 
         return results
+
+    def _generate_template_tweet(self, plan: dict) -> dict:
+        """Generate a template tweet without API calls."""
+        theme = plan.get("theme", "AI")
+        description = plan.get("description", "")
+        content_type = plan.get("content_type", "single")
+
+        if content_type == "thread":
+            return {
+                "tweets": [
+                    {"text": f"🧵 {theme}について解説します。\n\n{description[:80]}\n\n以下スレッドで詳しく👇", "type": "thread_part", "hashtags": ["#AI"]},
+                    {"text": f"1/ まず基本的なポイントから。{theme}は今、大きな転換期を迎えています。", "type": "thread_part", "hashtags": []},
+                    {"text": f"2/ 特に注目すべきは、{description[:60]}という点です。", "type": "thread_part", "hashtags": []},
+                    {"text": f"3/ まとめ：{theme}の動向は要チェック。フォローして最新情報をキャッチ！\n\n#AI #LLM #テック", "type": "thread_part", "hashtags": ["#AI", "#LLM"]},
+                ],
+                "alternatives": [],
+            }
+        else:
+            return {
+                "tweets": [
+                    {"text": f"【{theme}】\n\n{description[:100]}\n\n詳しく知りたい方はフォロー！\n\n#AI #LLM", "type": "single", "hashtags": ["#AI", "#LLM"]},
+                ],
+                "alternatives": [],
+            }
 
     def run_posting(self, tweet_ids: list[int] | None = None) -> list[dict]:
         """Post approved tweets.

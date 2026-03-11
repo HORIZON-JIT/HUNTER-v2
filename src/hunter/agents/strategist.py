@@ -45,7 +45,7 @@ class StrategistAgent(BaseAgent):
     def __init__(self, api_key: str, model: str = "claude-sonnet-4-6"):
         super().__init__(api_key, model)
         self.system_prompt = SYSTEM_PROMPT
-        self.max_tokens = 2048
+        self.max_tokens = 4096
 
     def create_weekly_plan(
         self,

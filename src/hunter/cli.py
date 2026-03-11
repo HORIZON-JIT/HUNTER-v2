@@ -4,6 +4,7 @@ import json
 
 import click
 
+from hunter.agents.base import AgentAPIError
 from hunter.config import Settings
 from hunter.db import (
     get_analytics_summary,
@@ -58,8 +59,9 @@ def status(ctx):
 
 
 @cli.command()
+@click.option("--dry-run", is_flag=True, help="Generate template plan without calling Claude API")
 @click.pass_context
-def plan(ctx):
+def plan(ctx, dry_run):
     """Generate a weekly content plan."""
     from hunter.agents.orchestrator import Orchestrator
 
@@ -67,7 +69,13 @@ def plan(ctx):
     orch = Orchestrator(settings)
 
     click.echo("Generating weekly content plan...")
-    plans = orch.run_planning()
+    try:
+        plans = orch.run_planning(dry_run=dry_run)
+    except AgentAPIError as e:
+        click.echo(f"\n[Error] {e}")
+        click.echo("\nTip: '--dry-run' オプションでテンプレートベースのプラン生成が可能です。")
+        click.echo("  例: hunter plan --dry-run")
+        return
 
     click.echo(f"\n=== Weekly Plan ({len(plans)} items) ===\n")
     for i, p in enumerate(plans, 1):
@@ -76,13 +84,16 @@ def plan(ctx):
         click.echo(f"   {p.get('description', '')[:100]}")
         click.echo()
 
+    if dry_run:
+        click.echo("(dry-run mode: テンプレートベースのプラン)")
     click.echo(f"Plans saved to database.")
 
 
 @cli.command()
 @click.option("--count", default=5, help="Number of tweets to create")
+@click.option("--dry-run", is_flag=True, help="Generate template tweets without calling Claude API")
 @click.pass_context
-def create(ctx, count):
+def create(ctx, count, dry_run):
     """Create tweet drafts from content plan."""
     from hunter.agents.orchestrator import Orchestrator
 
@@ -90,7 +101,13 @@ def create(ctx, count):
     orch = Orchestrator(settings)
 
     click.echo(f"Creating up to {count} tweet drafts...")
-    results = orch.run_creation()
+    try:
+        results = orch.run_creation(dry_run=dry_run)
+    except AgentAPIError as e:
+        click.echo(f"\n[Error] {e}")
+        click.echo("\nTip: '--dry-run' オプションでテンプレートベースの下書き生成が可能です。")
+        click.echo("  例: hunter create --dry-run")
+        return
 
     if not results:
         click.echo("No plans found. Run 'hunter plan' first.")
@@ -102,6 +119,9 @@ def create(ctx, count):
         click.echo(f"[#{r['id']}] ({r['theme']})")
         click.echo(f"  {r['content'][:200]}")
         click.echo()
+
+    if dry_run:
+        click.echo("(dry-run mode: テンプレートベースの下書き)")
 
 
 @cli.command()
@@ -187,6 +207,9 @@ def search(ctx, query, count):
     click.echo(f"Searching: '{query}'...")
     try:
         tweets = reader.search_tweets(query, count)
+        if not tweets:
+            click.echo("No results found.")
+            return
         click.echo(f"\n=== {len(tweets)} Results ===\n")
         for t in tweets:
             text = t.get("text", t.get("content", ""))[:200]
@@ -196,7 +219,13 @@ def search(ctx, query, count):
             click.echo(f"  {text}")
             click.echo()
     except Exception as e:
-        click.echo(f"Error: {e}")
+        error_msg = str(e)
+        if "401" in error_msg or "Unauthorized" in error_msg:
+            click.echo(f"[Error] Reader APIキーが無効です。.env の {settings.reader_provider.upper()}_API_KEY を確認してください。")
+        elif "Proxy" in error_msg or "proxy" in error_msg:
+            click.echo(f"[Error] ネットワーク接続エラー（プロキシ）: {error_msg}")
+        else:
+            click.echo(f"[Error] {e}")
 
 
 @cli.command()
@@ -213,6 +242,9 @@ def spy(ctx, username, count):
     click.echo(f"Fetching tweets from @{username}...")
     try:
         tweets = reader.get_user_tweets(username, count)
+        if not tweets:
+            click.echo(f"No tweets found for @{username}.")
+            return
         click.echo(f"\n=== @{username}'s Recent Tweets ({len(tweets)}) ===\n")
         for t in tweets:
             text = t.get("text", t.get("content", ""))[:200]
@@ -220,7 +252,13 @@ def spy(ctx, username, count):
             click.echo(f"({likes} likes) {text}")
             click.echo()
     except Exception as e:
-        click.echo(f"Error: {e}")
+        error_msg = str(e)
+        if "401" in error_msg or "Unauthorized" in error_msg:
+            click.echo(f"[Error] Reader APIキーが無効です。.env の {settings.reader_provider.upper()}_API_KEY を確認してください。")
+        elif "Proxy" in error_msg or "proxy" in error_msg:
+            click.echo(f"[Error] ネットワーク接続エラー（プロキシ）: {error_msg}")
+        else:
+            click.echo(f"[Error] {e}")
 
 
 @cli.command()
@@ -242,7 +280,11 @@ def engage(ctx):
 
     orch = Orchestrator(settings)
     click.echo("Generating engagement suggestions...")
-    suggestions = orch.community.suggest_engagement(trends)
+    try:
+        suggestions = orch.community.suggest_engagement(trends)
+    except AgentAPIError as e:
+        click.echo(f"\n[Error] {e}")
+        return
 
     click.echo("\n=== Engagement Suggestions ===\n")
 
